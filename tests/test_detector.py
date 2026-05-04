@@ -1,5 +1,5 @@
 """
-Full integration test — webcam + YOLOv8 detection + Telegram alerts + /status command.
+Full integration test — webcam + YOLOv8 detection + Telegram alerts + /stato command.
 
 - Green box = standing/sitting (ok)
 - Red box = ON FLOOR (triggers alert after threshold)
@@ -59,8 +59,8 @@ def main() -> None:
         commands, update_offset = notifier.poll_commands(update_offset)
         for chat_id, cmd in commands:
             match cmd:
-                case "/status":
-                    _log(f"📲 /status from chat {chat_id}")
+                case "/stato":
+                    _log(f"📲 /stato from chat {chat_id}")
                     notifier.send_status_reply(chat_id, latest_frame, on_floor_since)
                 case _:
                     _log(f"⚙️  Unknown command '{cmd}' — ignored")

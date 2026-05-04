@@ -107,7 +107,7 @@ class TelegramNotifier:
             chat_id: str = str(msg.get("chat", {}).get("id", ""))
 
             if text.startswith("/") and chat_id:
-                # Strip bot @mention: /status@MyBot → /status
+                # Strip bot @mention: /stato@MyBot → /stato
                 cmd = text.split("@")[0].split()[0]
                 commands.append((chat_id, cmd))
 
@@ -119,7 +119,7 @@ class TelegramNotifier:
         frame: np.ndarray | None,
         on_floor_since: datetime | None,
     ) -> bool:
-        """Reply to a /status command with the latest frame and current state."""
+        """Reply to a /stato command with the latest frame and current state."""
         if on_floor_since is not None:
             minutes = (datetime.now() - on_floor_since).total_seconds() / 60
             status_line = (
@@ -162,7 +162,7 @@ class TelegramNotifier:
     def send_startup(self) -> bool:
         sent = self._send_text(
             "👋 <b>OcchioSuNonno attivo!</b>\nIl sistema di monitoraggio è operativo. 🟢\n"
-            "Invia /status per ricevere uno screenshot live.",
+            "Invia /stato per ricevere uno screenshot live.",
         )
         logger.info("✅ Startup message sent")
         return sent

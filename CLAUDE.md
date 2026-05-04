@@ -53,7 +53,7 @@ src/fall_watch/
 ├── detector.py        # YOLOv8 + FrameAnalysis/PersonDetection + lying-down / climbing heuristics + debug overlay
 ├── fall_watcher.py    # FallWatcher state machine: timing, hysteresis, cooldown
 ├── climb_watcher.py   # ClimbWatcher state machine: short-window threshold, cooldown, supervision suppression
-└── notifier.py        # Notifier protocol + TelegramNotifier; alerts, /status, /debug, /config replies, command polling
+└── notifier.py        # Notifier protocol + TelegramNotifier; alerts, /stato, /debug, /config replies, command polling
 
 tests/
 ├── test_detector.py       # integration: webcam + detection + Telegram (manual)
@@ -134,7 +134,7 @@ otherwise pytest will run its top-level code on every collection.
 - **Telegram commands:** `notifier.poll_commands()` is non-blocking
   (`getUpdates` with `timeout=0`); `main.py` calls it once per frame loop
   and dispatches via `match/case`. Three commands handled today:
-  - `/status` — live screenshot + state ("nonno sta bene" / "a terra da N min")
+  - `/stato` — live screenshot + state ("nonno sta bene" / "a terra da N min")
   - `/debug` — annotated frame: keypoints, ROI overlays, per-person status, banner. Uses the last cached frame and analysis from the main loop.
   - `/config` — `Config.render()` output sent as MarkdownV2 code block; secrets
     masked (`telegram_token`, `telegram_chat_id` → `***`; `rtsp_url` password

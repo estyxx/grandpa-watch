@@ -81,12 +81,12 @@ def _handle_commands(
     last_frame: np.ndarray | None,
     last_analysis: FrameAnalysis | None,
 ) -> int:
-    """Poll Telegram for commands and reply to /status, /debug, and /config requests."""
+    """Poll Telegram for commands and reply to /stato, /debug, and /config requests."""
     commands, new_offset = notifier.poll_commands(offset)
     for chat_id, cmd in commands:
         match cmd:
-            case "/status":
-                logger.info("📲 /status requested by chat %s", chat_id)
+            case "/stato":
+                logger.info("📲 /stato requested by chat %s", chat_id)
                 watcher.handle_status_request(chat_id)
             case "/debug":
                 logger.info("📲 /debug requested by chat %s", chat_id)

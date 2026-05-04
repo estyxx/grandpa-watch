@@ -158,7 +158,7 @@ Find the camera IP from your router's device list or the EZVIZ app under
 
 | Command | Audience | Description |
 |---|---|---|
-| `/status` | everyone | Live screenshot with current monitoring state |
+| `/stato` | everyone | Live screenshot with current monitoring state |
 | `/debug` | admin | Annotated frame showing pose keypoints, ROI zones, and per-person detection flags |
 | `/config` | admin | Current effective configuration with secrets redacted — useful for remote diagnostics without SSH |
 
@@ -166,7 +166,7 @@ The `Audience` column reflects what's shown in each user's command menu in
 Telegram. The split is purely a UI hint — the bot itself accepts any of these
 commands from any group member, since the family group is private and trusted.
 
-To configure the menu so that non-admins only see `/status` while admins see
+To configure the menu so that non-admins only see `/stato` while admins see
 all three, push two scoped command lists to Telegram once with
 [`setMyCommands`](https://core.telegram.org/bots/api#setmycommands). BotFather
 only sets the global default; per-admin scoping requires a one-shot API call.
@@ -178,7 +178,7 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setMyCommands" \
   -H "Content-Type: application/json" \
   -d "{
     \"commands\": [
-      {\"command\": \"status\", \"description\": \"📷 Come sta nonno adesso\"},
+      {\"command\": \"stato\", \"description\": \"📷 Come sta nonno adesso\"},
       {\"command\": \"config\", \"description\": \"⚙️ Mostra configurazione attiva\"},
       {\"command\": \"debug\", \"description\": \"🔍 Frame con keypoints YOLO\"}
     ],
@@ -187,7 +187,7 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setMyCommands" \
 ```
 
 The default (member-facing) list is set via BotFather → `Edit Commands` — list
-only the public commands there (just `/status`).
+only the public commands there (just `/stato`).
 
 ## Dev
 

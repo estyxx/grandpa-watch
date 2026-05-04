@@ -9,3 +9,13 @@ dist/
 .pytest_cache/
 *.pt          # YOLO model weights
 yolov8n-pose.pt
+
+# Logs
+*.log
+
+# Assets / design files
+*.png
+*.svg
+
+# Cursor/Claude agent worktrees
+.claude/

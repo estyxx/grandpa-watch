@@ -38,7 +38,7 @@ class FallWatcher:
             self._off_floor()
 
     def handle_status_request(self, chat_id: str) -> None:
-        """Reply to a /status command using the current internal state and last frame."""
+        """Reply to a /stato command using the current internal state and last frame."""
         self._notifier.send_status_reply(
             chat_id, self._state.latest_frame, self._state.on_floor_since
         )
