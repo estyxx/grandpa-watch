@@ -81,7 +81,7 @@ def _handle_commands(
     last_frame: np.ndarray | None,
     last_analysis: FrameAnalysis | None,
 ) -> int:
-    """Poll Telegram for commands and reply to /status and /debug requests."""
+    """Poll Telegram for commands and reply to /status, /debug, and /config requests."""
     commands, new_offset = notifier.poll_commands(offset)
     for chat_id, cmd in commands:
         match cmd:
@@ -91,6 +91,9 @@ def _handle_commands(
             case "/debug":
                 logger.info("📲 /debug requested by chat %s", chat_id)
                 _handle_debug(notifier, config, chat_id, last_frame, last_analysis)
+            case "/config":
+                logger.info("📲 /config requested by chat %s", chat_id)
+                notifier.send_config_reply(chat_id, config.render())
             case _:
                 logger.warning("⚙️  Unknown command '%s' from chat %s — ignored", cmd, chat_id)
     return new_offset

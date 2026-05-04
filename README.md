@@ -68,6 +68,14 @@ rtsp://admin:VERIFICATION_CODE@CAMERA_IP:554/h264/ch01/main/av_stream
 Find the camera IP from your router's device list or the EZVIZ app under
 *Device Settings → Device Info*.
 
+## Telegram commands
+
+| Command | Description |
+|---|---|
+| `/status` | Live screenshot with current monitoring state |
+| `/debug` | Annotated frame showing pose keypoints, ROI zones, and per-person detection flags |
+| `/config` | Current effective configuration with secrets redacted — useful for remote diagnostics without SSH |
+
 ## Dev
 
 ```bash

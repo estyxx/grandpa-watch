@@ -20,6 +20,7 @@ class Notifier(Protocol):
         self, chat_id: str, frame: np.ndarray | None, on_floor_since: datetime | None
     ) -> bool: ...
     def send_debug_reply(self, chat_id: str, annotated_frame: np.ndarray, caption: str) -> bool: ...
+    def send_config_reply(self, chat_id: str, rendered: str) -> bool: ...
     def poll_commands(self, offset: int) -> tuple[list[tuple[str, str]], int]: ...
 
 
@@ -30,12 +31,14 @@ class TelegramNotifier:
     def _now(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
 
-    def _send_text(self, text: str, to_chat_id: str | None = None) -> bool:
+    def _send_text(
+        self, text: str, to_chat_id: str | None = None, parse_mode: str = "HTML"
+    ) -> bool:
         chat_id = to_chat_id or self._config.telegram_chat_id
         try:
             r = requests.post(
                 f"https://api.telegram.org/bot{self._config.telegram_token}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+                json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode},
                 timeout=10,
             )
             r.raise_for_status()
@@ -151,6 +154,10 @@ class TelegramNotifier:
     def send_debug_reply(self, chat_id: str, annotated_frame: np.ndarray, caption: str) -> bool:
         """Send an annotated debug frame to the requesting chat."""
         return self._send_photo(annotated_frame, caption, chat_id)
+
+    def send_config_reply(self, chat_id: str, rendered: str) -> bool:
+        """Reply to a /config command with the current effective configuration."""
+        return self._send_text(rendered, to_chat_id=chat_id, parse_mode="MarkdownV2")
 
     def send_startup(self) -> bool:
         sent = self._send_text(
