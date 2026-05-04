@@ -6,8 +6,15 @@ This file is read by Claude Code. Follow everything here precisely.
 
 ## Project overview
 
-`fall-watch` monitors an RTSP camera stream and alerts a Telegram group when a
-person has been lying on the floor for too long. It runs 24/7 on a Raspberry Pi 5.
+`fall-watch` monitors an RTSP camera stream and alerts a Telegram group on
+two situations:
+
+- the person has been lying on the floor for longer than a threshold (fall);
+- the person appears to be climbing over the bedrail (climb-out).
+
+The climb-out signal is automatically suppressed when more than one person
+is in the frame, on the assumption that a family helper is assisting and no
+real climb is in progress. Runs 24/7 on a Raspberry Pi 5.
 
 Alerts go to a private family Telegram group. Camera: EZVIZ, accessed via RTSP.
 
@@ -20,16 +27,15 @@ Alerts go to a private family Telegram group. Camera: EZVIZ, accessed via RTSP.
 ```bash
 uv sync                                   # install all deps (including dev)
 uv run fall-watch                         # run the monitor
-uv run python tests/test_detector.py      # integration test: webcam + detection + Telegram
-uv run python tests/test_telegram.py      # Telegram-only smoke test (no camera needed)
-uv run python tests/test_frame.py image.jpg                 # test detection on a static image
+uv run python tests/test_detector.py      # integration: webcam + detection + Telegram (manual)
+uv run python tests/test_frame.py image.jpg                 # detection on a static image (manual)
 uv run python scripts/setup_roi.py image.jpg --zone floor   # capture FLOOR_ROI
 uv run python scripts/setup_roi.py image.jpg --zone bed     # capture BED_ROI
 
 uv run ruff check src/ tests/            # lint
 uv run ruff format src/                  # format
 uv run mypy src/                         # type check
-uv run pytest                            # run tests
+uv run pytest                            # run unit tests only
 ```
 
 Always run `ruff check` and `mypy` before finishing any task. Fix all warnings —
@@ -42,24 +48,36 @@ do not suppress them unless there is a very good reason, and if so, leave a comm
 ```
 src/fall_watch/
 ├── main.py            # entry point, orchestration only (loop + command polling)
-├── config.py          # Config dataclass, env-var loading, polygon parsing
-├── detector.py        # YOLOv8 + per-person FrameAnalysis + lying-down / climbing heuristics
+├── config.py          # Config dataclass, env-var loading, polygon parsing, render() with redaction
+├── camera.py          # FrameReader protocol + FreshFrameCapture (background reader thread)
+├── detector.py        # YOLOv8 + FrameAnalysis/PersonDetection + lying-down / climbing heuristics + debug overlay
 ├── fall_watcher.py    # FallWatcher state machine: timing, hysteresis, cooldown
-├── climb_watcher.py   # ClimbWatcher state machine: short-window threshold, cooldown
-└── notifier.py        # Notifier protocol + TelegramNotifier; alerts and command polling
+├── climb_watcher.py   # ClimbWatcher state machine: short-window threshold, cooldown, supervision suppression
+└── notifier.py        # Notifier protocol + TelegramNotifier; alerts, /status, /debug, /config replies, command polling
 
 tests/
-├── test_detector.py   # integration test: webcam + detection + Telegram
-├── test_telegram.py   # Telegram-only smoke test (no camera needed)
-└── test_frame.py      # test detection on a single static image
+├── test_detector.py       # integration: webcam + detection + Telegram (manual)
+├── test_frame.py          # detection on a single static image (manual, prints + window)
+├── test_camera.py         # unit tests: FreshFrameCapture buffer-draining behaviour
+├── test_climb_watcher.py  # unit tests: supervision suppression + threshold/cooldown
+└── test_config.py         # unit tests: Config.render() redaction and formatting
 
 scripts/
 └── setup_roi.py       # interactive ROI setup tool (floor or bed zone)
 ```
 
 Keep these concerns strictly separated. `main.py` orchestrates, `config.py` owns
-configuration, `detector.py` does vision, the watchers own state machines,
-`notifier.py` does IO. Do not mix them.
+configuration, `camera.py` owns camera I/O, `detector.py` does vision, the
+watchers own state machines, `notifier.py` does IO. Do not mix them.
+
+`pytest` runs only the unit tests (`test_camera.py`, `test_climb_watcher.py`,
+`test_config.py`). The `test_detector.py` and `test_frame.py` files are
+manual smoke/integration tests with side effects (camera, GUI windows) —
+invoke them explicitly via `uv run python tests/<file>`. Both wrap their
+side-effecting code inside `def main()` + `if __name__ == "__main__":`, so
+pytest's import-time collection does not trigger them. **Any new manual
+script added to `tests/` MUST follow the same `__main__` guard pattern**,
+otherwise pytest will run its top-level code on every collection.
 
 ---
 
@@ -74,6 +92,15 @@ configuration, `detector.py` does vision, the watchers own state machines,
 - **Alert cooldown:** once alerted, wait `ALERT_COOLDOWN_MINUTES` (default 15 min)
   before alerting again, to avoid spam
 - **Photo alerts:** both fall alert and all-clear include a JPEG snapshot, not just text
+- **Background frame reader:** OpenCV's FFmpeg backend buffers ~150 frames between
+  reads at 30 fps × 5 s sleep. A naïve read-then-sleep loop drifts behind real time
+  by 5 s every cycle. `camera.FreshFrameCapture` runs a daemon thread that drains
+  the buffer continuously and exposes only the most recent frame via `read_latest()`.
+  `READER_POLL_INTERVAL` (default 0.01 s) is the back-off after a failed read; in
+  the happy path the reader spins without sleeping. FFmpeg is also configured with
+  `rtsp_transport=tcp`, `nobuffer`, `low_delay`, `max_delay=0` for low latency.
+  `main.py` depends only on the `FrameReader` Protocol, mirroring how the watchers
+  depend on `Notifier` — swap the implementation, don't touch the orchestration.
 - **Floor ROI:** a configurable polygon zone (`FLOOR_ROI` env var) restricts
   detection to the floor area, excluding the bed to avoid false positives;
   format: `"x1,y1;x2,y2;x3,y3;x4,y4"` — captured via `scripts/setup_roi.py`;
@@ -82,18 +109,37 @@ configuration, `detector.py` does vision, the watchers own state machines,
   Used to gate climb-out detection — a hip inside this zone with an ankle outside
   it is the climbing signal. Captured via `setup_roi.py --zone bed`. Same format
   as `FLOOR_ROI`: `"x1,y1;x2,y2;x3,y3;x4,y4"`.
+- **ROIs are absolute pixel coordinates, not normalized.** They must be captured
+  against an image with the same resolution as the live RTSP frame, otherwise
+  the polygon ends up in the wrong place and detection silently breaks. The
+  capture frame must come from `ffmpeg -i "$RTSP_URL" -frames:v 1 …` (or
+  equivalent), not a tool that resamples — VLC snapshots at display resolution
+  are a known foot-gun. See README's "Setting up ROIs" for the procedure.
 - **Climb-out detection:** alerts when grandpa appears to be climbing over the
   bedrail. Heuristic: posture upright (shoulders meaningfully above hips), at
   least one hip inside `BED_ROI`, at least one ankle outside it. Fires after
   `CLIMB_THRESHOLD_SECONDS` (default 10) of consecutive detections, with a
   cooldown of `CLIMB_ALERT_COOLDOWN_MINUTES` (default 5). No all-clear —
   climbing is a one-shot warning, not a sustained state.
+- **Supervision suppression:** when more than one person is in the frame
+  (`FrameAnalysis.is_supervised`), the climb watcher resets its streak and
+  skips alert evaluation. Rationale: family helper present means nonno is
+  being assisted, not climbing alone. Toggle with `CLIMB_SUPPRESS_WHEN_SUPERVISED`
+  (default `true`). Only the climb watcher applies this — the fall watcher
+  is already gated by `FLOOR_ROI`, which excludes the bed area.
 - **One inference, two signals:** `analyse_frame` runs YOLO once per call and
   returns a `FrameAnalysis(people=tuple[PersonDetection, ...])` with both
   `on_floor` and `climbing_out` set per person. Both watchers consume the same
   analysis — never two model runs per frame.
-- **/status command:** family can send `/status` to the Telegram group at any time
-  to get a live screenshot and current state
+- **Telegram commands:** `notifier.poll_commands()` is non-blocking
+  (`getUpdates` with `timeout=0`); `main.py` calls it once per frame loop
+  and dispatches via `match/case`. Three commands handled today:
+  - `/status` — live screenshot + state ("nonno sta bene" / "a terra da N min")
+  - `/debug` — annotated frame: keypoints, ROI overlays, per-person status, banner. Uses the last cached frame and analysis from the main loop.
+  - `/config` — `Config.render()` output sent as MarkdownV2 code block; secrets
+    masked (`telegram_token`, `telegram_chat_id` → `***`; `rtsp_url` password
+    redacted via `urllib.parse`); ROIs shown as point counts; durations shown
+    with units.
 
 ---
 
@@ -198,8 +244,11 @@ clear. Avoid them when they become hard to read — a loop is fine.
 
 Use the standard `logging` module via `logging.getLogger(__name__)`. The root
 logger is configured in `main.py` (`_setup_logging()`) with a console handler
-and a daily-rotating file handler. Do not use `print()` directly outside of
-scripts. Do not add extra logging frameworks unless the project grows substantially.
+and a daily-rotating file handler that rotates at 20:00 and keeps 7 days of
+backups. Output path defaults to `fall-watch.log` (override with `LOG_FILE`),
+level defaults to `INFO` (override with `LOG_LEVEL`). Do not use `print()`
+directly outside of scripts and the manual smoke tests. Do not add extra
+logging frameworks unless the project grows substantially.
 
 ---
 
@@ -222,6 +271,14 @@ scripts. Do not add extra logging frameworks unless the project grows substantia
 new class implementing it (e.g. `EmailNotifier`) and substitute it in `main.py`
 where `TelegramNotifier` is constructed. The watchers depend only on the protocol,
 so no other code needs to change.
+
+## Adding a new camera source
+
+The same pattern applies to camera I/O: `camera.py` exposes a `FrameReader`
+`Protocol` (`failed`, `read_latest()`, `release()`). To support a different
+source (e.g. a USB webcam, a video file, a fake source for tests), implement
+the protocol and swap the construction site in `main.py`. The main loop and
+the reconnect logic depend only on the protocol.
 
 ---
 
