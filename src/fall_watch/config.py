@@ -15,6 +15,7 @@ class Config:
     bed_roi: tuple[tuple[int, int], ...] | None = None
     climb_threshold_seconds: int = 10
     climb_alert_cooldown_minutes: float = 5.0
+    climb_suppress_when_supervised: bool = True
     reader_poll_interval: float = 0.01
 
     @classmethod
@@ -31,6 +32,10 @@ class Config:
             bed_roi=parse_polygon(os.getenv("BED_ROI")),
             climb_threshold_seconds=int(os.getenv("CLIMB_THRESHOLD_SECONDS", "10")),
             climb_alert_cooldown_minutes=float(os.getenv("CLIMB_ALERT_COOLDOWN_MINUTES", "5")),
+            climb_suppress_when_supervised=os.getenv(
+                "CLIMB_SUPPRESS_WHEN_SUPERVISED", "true"
+            ).lower()
+            not in ("0", "false", "no"),
             reader_poll_interval=float(os.getenv("READER_POLL_INTERVAL", "0.01")),
         )
 

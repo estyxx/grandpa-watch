@@ -53,6 +53,11 @@ class FrameAnalysis:
     def any_climbing_out(self) -> bool:
         return any(p.climbing_out for p in self.people)
 
+    @property
+    def is_supervised(self) -> bool:
+        """True when more than one person is in frame — assume nonno isn't alone."""
+        return len(self.people) > 1
+
 
 def load_model() -> YOLO:
     """Load YOLOv8 nano pose model — downloads ~6MB on first run."""

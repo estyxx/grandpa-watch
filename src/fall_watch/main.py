@@ -164,7 +164,7 @@ def main() -> None:
             )
             last_frame = frame
             watcher.observe(last_analysis.any_on_floor, frame, now)
-            climb_watcher.observe(last_analysis.any_climbing_out, frame, now)
+            climb_watcher.observe(last_analysis, frame, now)
 
             time.sleep(config.frame_interval_seconds)
     finally:

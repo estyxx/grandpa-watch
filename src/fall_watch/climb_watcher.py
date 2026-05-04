@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from fall_watch.config import Config
+from fall_watch.detector import FrameAnalysis
 from fall_watch.notifier import Notifier
 
 logger = logging.getLogger(__name__)
@@ -23,9 +24,14 @@ class ClimbWatcher:
         self._notifier = notifier
         self._state = _ClimbState()
 
-    def observe(self, person_climbing_out: bool, frame: np.ndarray, now: datetime) -> None:
-        """Feed one detection signal into the climb-out state machine."""
-        if person_climbing_out:
+    def observe(self, analysis: FrameAnalysis, frame: np.ndarray, now: datetime) -> None:
+        """Feed one frame analysis into the climb-out state machine."""
+        if self._config.climb_suppress_when_supervised and analysis.is_supervised:
+            self._state.climbing_since = None
+            logger.debug("climb suppressed: %d people in frame", len(analysis.people))
+            return
+
+        if analysis.any_climbing_out:
             self._on_climbing(frame, now)
         else:
             self._state.climbing_since = None
